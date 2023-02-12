@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Cтраница пользователя {{ user.username }}{% endblock %}
+{% block header %}Моя лента новостей{% endblock %}
+{% block content %} 
+  {% include 'includes/switcher.html'%}
+  {% for post in page_obj %}
+    {% include 'includes/post_card.html' with show_author=True show_group=True %}    
+  {% endfor %}
+  {% include 'includes/paginator.html' %}
+{% endblock %}
