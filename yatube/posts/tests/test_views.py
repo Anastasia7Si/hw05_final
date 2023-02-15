@@ -8,8 +8,9 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
-
-from posts.models import Group, Post, User, Follow
+from posts.forms import PostForm
+from posts.models import Group, Post, User, Follow, Comment
+from posts.views import POSTS_PER_PAGE
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
@@ -61,6 +62,7 @@ class PostViewsTests(TestCase):
         cls.POST_EDIT_URL = reverse(
             'posts:post_edit', kwargs={'post_id': f'{cls.post.id}'}
         )
+        cls.FOLLOW = reverse('posts:follow_index')
 
     @classmethod
     def tearDownClass(cls):
@@ -75,6 +77,7 @@ class PostViewsTests(TestCase):
             (PostViewsTests.POST_DETAIL_URL, 'posts/post_detail.html'),
             (PostViewsTests.POST_CREATE_URL, 'posts/create_post.html'),
             (PostViewsTests.POST_EDIT_URL, 'posts/create_post.html'),
+            (PostViewsTests.FOLLOW, 'posts/follow.html'),
         ]
 
     def test_post_pages_accessible_by_name(self):
@@ -130,6 +133,8 @@ class PostViewsTests(TestCase):
         first_author = response.context['author']
         self.assertIsInstance(first_author, User)
         self.assertEqual(first_author, PostViewsTests.author)
+        following = response.context['following']
+        self.assertIsInstance(following, bool)
 
     def context_post_is_valid(self, url):
         """Проверка контекста по ключу 'post'."""
@@ -143,18 +148,28 @@ class PostViewsTests(TestCase):
     def test_post_detail_page_show_correct_context(self):
         """Шаблон post_detail сформирован с правильным контекстом."""
         self.context_post_is_valid(PostViewsTests.POST_DETAIL_URL)
+        user = User.objects.create_user(username='testAuthorized')
+        Comment.objects.create(
+            post=PostViewsTests.post,
+            author=user,
+            text='Тест-комментарий'
+        )
+        response = PostViewsTests.author_client.get(
+            PostViewsTests.POST_DETAIL_URL
+        )
+        comment = response.context['comments'][0]
+        self.assertIsInstance(comment, Comment)
+        self.assertEqual(comment.author, user)
+        self.assertEqual(comment.post, PostViewsTests.post)
+        self.assertEqual(response.context['comments'].count(), 1)
+        field = response.context['form'].fields['text']
+        self.assertIsInstance(field, forms.fields.CharField)
 
     def form_fields_is_valid(self, url):
         """Проверка типов полей формы."""
         response = PostViewsTests.author_client.get(url)
-        form_fields = {
-            'text': forms.fields.CharField,
-            'group': forms.ModelChoiceField
-        }
-        for value, expected in form_fields.items():
-            with self.subTest(value=value):
-                form_field = response.context['form'].fields[value]
-                self.assertIsInstance(form_field, expected)
+        form = response.context.get('form')
+        self.assertIsInstance(form, PostForm)
 
     def test_create_page_show_correct_context(self):
         """Шаблон create_post сформирован с правильным контекстом."""
@@ -231,14 +246,11 @@ class PostPaginatorTests(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.author = User.objects.create_user(username='testAuthor')
-        cls.author_client = Client()
-        cls.author_client.force_login(cls.author)
         cls.group = Group.objects.create(
             title='Тест-группа',
             slug='test',
             description='Тест-описание',
         )
-
         cls.INDEX_URL = reverse('posts:index')
         cls.GROUP_LIST_URL = reverse(
             'posts:group_list', kwargs={'slug': f'{cls.group.slug}'}
@@ -247,15 +259,18 @@ class PostPaginatorTests(TestCase):
             'posts:profile', kwargs={'username': f'{cls.author.username}'}
         )
         cls.ADDPOSTS = 5
-
         cls.posts = Post.objects.bulk_create(
             Post(
                 author=cls.author,
                 text=f'{i + 1} большой тест-пост',
                 group=cls.group
             )
-            for i in range(settings.NUMBER_ROWS + cls.ADDPOSTS)
+            for i in range(POSTS_PER_PAGE + cls.ADDPOSTS)
         )
+
+    def setUp(self):
+        self.author_client = Client()
+        self.author_client.force_login(self.author)
 
     def test_accordance_posts_per_pages(self):
         """Проверяем, что количество постов
@@ -267,12 +282,12 @@ class PostPaginatorTests(TestCase):
             PostPaginatorTests.PROFILE_URL
         ]:
             with self.subTest(url=url):
-                response = PostPaginatorTests.author_client.get(url)
+                response = self.author_client.get(url)
                 self.assertEqual(
                     len(response.context['page_obj']),
-                    settings.NUMBER_ROWS
+                    POSTS_PER_PAGE
                 )
-                response_second = PostPaginatorTests.author_client.get(
+                response_second = self.author_client.get(
                     f'{url}?page=2'
                 )
                 self.assertEqual(
@@ -285,10 +300,8 @@ class FollowViewsTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls.user = User.objects.create_user(username='testAuthorized')
         cls.author = User.objects.create_user(username='testAuthor')
-        cls.author_client = Client()
-        cls.author_client.force_login(cls.author)
-
         cls.group = Group.objects.create(
             title='Тест-группа',
             slug='test',
@@ -315,9 +328,10 @@ class FollowViewsTests(TestCase):
 
     def setUp(self):
         self.guest_client = Client()
-        self.user = User.objects.create_user(username='testAuthorized')
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
+        self.author_client = Client()
+        self.author_client.force_login(self.author)
 
     def test_authorized_follow_author(self):
         """Проверяем, что авторизованный пользователь

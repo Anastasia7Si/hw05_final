@@ -100,7 +100,7 @@ STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
 LOGIN_URL = 'users:login'
 LOGIN_REDIRECT_URL = 'posts:index'
 
-NUMBER_ROWS = 10
+POSTS_PER_PAGE = 10
 
 CSRF_FAILURE_VIEW = 'core.views.csrf_failure'
 

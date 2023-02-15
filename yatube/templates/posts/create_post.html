@@ -21,9 +21,17 @@
         <div class="card-body">   
           {% if form.errors %}
             {% for field in form %}
-              {% for error in field.errors %}<div class="alert alert-danger">{{ error|escape }}</div>{% endfor %}
+              {% for error in field.errors %}
+                <div class="alert alert-danger">
+                  {{ error|escape }}
+                </div>
+              {% endfor %}
             {% endfor %}
-            {% for error in form.non_field_errors %}<div class="alert alert-danger">{{ error|escape }}</div>{% endfor %}
+            {% for error in form.non_field_errors %}
+              <div class="alert alert-danger">
+                {{ error|escape }}
+              </div>
+            {% endfor %}
           {% endif %}   
           <form method="post" enctype="multipart/form-data"
             {% if is_edit %} action="{% url 'posts:post_edit' post.pk %}" {% else %} action="{% url 'posts:post_create' %}" {% endif %}>

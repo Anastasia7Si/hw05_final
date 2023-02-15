@@ -1,7 +1,7 @@
 from http import HTTPStatus
 
 from django.test import Client, TestCase
-
+from django.urls import reverse
 from posts.models import Group, Post, User
 
 
@@ -9,6 +9,7 @@ INDEX = '/'
 CREATE = '/create/'
 CREATE_REVERSE = '/auth/login/?next=/create/'
 NON_EXISTING_PAGE = '/existing_page/'
+FOLLOW = '/follow/'
 
 
 class PostURLTests(TestCase):
@@ -28,29 +29,43 @@ class PostURLTests(TestCase):
             text='Длинный тестовый пост',
         )
 
-        cls.GROUP_POSTS = f'/group/{cls.group.slug}/'
-        cls.PROFILE = f'/profile/{cls.author.username}/'
-        cls.POST_DETAIL = f'/posts/{cls.post.id}/'
-        cls.EDIT = f'/posts/{cls.post.id}/edit/'
+        cls.GROUP_POSTS = reverse(
+            'posts:group_list', kwargs={'slug': f'{cls.group.slug}'}
+        )
+        cls.PROFILE = reverse(
+            'posts:profile', kwargs={'username': f'{cls.author.username}'}
+        )
+        cls.POST_DETAIL = reverse(
+            'posts:post_detail', kwargs={'post_id': f'{cls.post.id}'}
+        )
+        cls.EDIT = reverse(
+            'posts:post_edit', kwargs={'post_id': f'{cls.post.id}'}
+        )
         cls.EDIT_REVERSE = f'/auth/login/?next=/posts/{cls.post.id}/edit/'
+        cls.COMMENT = reverse(
+            'posts:add_comment', kwargs={'post_id': f'{cls.post.id}'}
+        )
+        cls.COM_REVERSE = f'/auth/login/?next=/posts/{cls.post.id}/comment/'
 
-    def setUp(self):
-        self.guest_client = Client()
-        self.user = User.objects.create_user(username='testAuthorized')
-        self.authorized_client = Client()
-        self.authorized_client.force_login(self.user)
-
-        self.public_urls = [
+        cls.public_urls = [
             (INDEX, 'posts/index.html'),
             (PostURLTests.GROUP_POSTS, 'posts/group_list.html'),
             (PostURLTests.PROFILE, 'posts/profile.html'),
             (PostURLTests.POST_DETAIL, 'posts/post_detail.html'),
         ]
 
-        self.private_urls = [
+        cls.private_urls = [
             (CREATE, 'posts/create_post.html'),
+            (FOLLOW, 'posts/follow.html'),
             (PostURLTests.EDIT, 'posts/create_post.html'),
+            (PostURLTests.COMMENT, 'posts/post_detail.html'),
         ]
+
+    def setUp(self):
+        self.guest_client = Client()
+        self.user = User.objects.create_user(username='testAuthorized')
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user)
 
     def test_existing_pages(self):
         """Проверяем, что страницы доступны любому пользователю
@@ -124,3 +139,9 @@ class PostURLTests(TestCase):
                     response,
                     template
                 )
+
+    def test_comment_url_redirect_anonymous_on_login(self):
+        """Проверяем, что страница posts/<int:post_id>/comment/ перенаправит
+        анонимного пользователя на страницу /login/."""
+        response = self.guest_client.get(PostURLTests.COMMENT, follow=True)
+        self.assertRedirects(response, PostURLTests.COM_REVERSE)
