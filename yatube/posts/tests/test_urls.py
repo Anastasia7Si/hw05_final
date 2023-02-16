@@ -142,8 +142,17 @@ class PostURLTests(TestCase):
     def test_authorized_client_creates_comment(self):
         """Проверяем, что страница posts/<int:post_id>/comment/
         доступна для авторизованного пользователя."""
-        response = self.authorized_client.get(PostURLTests.COMMENT)
-        self.assertEqual(response.status_code, HTTPStatus.FOUND)
+        self.form_data = {
+            'post': self.post,
+            'author': self.author,
+            'text': 'Тестовый комментарий'
+        }
+        response = self.authorized_client.post(
+            PostURLTests.COMMENT,
+            data=self.form_data,
+            follow=True
+        )
+        self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_comment_url_redirect_anonymous_on_login(self):
         """Проверяем, что страница posts/<int:post_id>/comment/ перенаправит
