@@ -142,9 +142,6 @@ class PostURLTests(TestCase):
     def test_authorized_client_creates_comment(self):
         """Проверяем, что страница posts/<int:post_id>/comment/
         доступна для авторизованного пользователя."""
-        self.COMMENT = reverse(
-            'posts:add_comment', kwargs={'post_id': f'{self.post.id}'}
-        )
         response = self.authorized_client.get(PostURLTests.COMMENT)
         self.assertEqual(response.status_code, HTTPStatus.FOUND)
 
