@@ -38,9 +38,10 @@ def group_posts(request, slug):
 def profile(request, username):
     return render(
         request, 'posts/profile.html',
-        {'page_obj': paginator(
-            request, Post.objects.select_related('group').all()),
-         'author': get_object_or_404(User, username=username),
+        {'author': get_object_or_404(User, username=username),
+         'page_obj': paginator(
+            request, get_object_or_404(
+                User, username=username).posts.select_related('group').all()),
          'following': request.user.is_authenticated and (
             request.user.follower.filter(
                 author=get_object_or_404(User, username=username)).exists()
