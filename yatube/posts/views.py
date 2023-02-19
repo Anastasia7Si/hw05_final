@@ -43,10 +43,8 @@ def profile(request, username):
             request, get_object_or_404(
                 User, username=username).posts.select_related('group').all()),
          'following': request.user.is_authenticated and (
-            request.user.follower.filter(
-                author=get_object_or_404(User, username=username)).exists()
-        )
-        }
+            request.user.follower.filter(user=request.user).exists())
+         }
     )
 
 

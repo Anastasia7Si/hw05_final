@@ -13,6 +13,16 @@ from posts.models import Group, Post, User, Follow, Comment
 from posts.views import POSTS_PER_PAGE
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
+INDEX_URL = reverse('posts:index')
+POST_CREATE_URL = reverse('posts:post_create', None)
+FOLLOW_URL = reverse('posts:follow_index')
+SMALL_GIF = (b'\x47\x49\x46\x38\x39\x61\x02\x00'
+             b'\x01\x00\x80\x00\x00\x00\x00\x00'
+             b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+             b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+             b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+             b'\x0A\x00\x3B'
+             )
 
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
@@ -28,17 +38,9 @@ class PostViewsTests(TestCase):
             slug='test-slug',
             description='Тест-описание',
         )
-        cls.small_gif = (
-            b'\x47\x49\x46\x38\x39\x61\x02\x00'
-            b'\x01\x00\x80\x00\x00\x00\x00\x00'
-            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
-            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
-            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
-            b'\x0A\x00\x3B'
-        )
         cls.image = SimpleUploadedFile(
             name='small.gif',
-            content=cls.small_gif,
+            content=SMALL_GIF,
             content_type='image/gif',
         )
         cls.post = Post.objects.create(
@@ -48,7 +50,6 @@ class PostViewsTests(TestCase):
             image=cls.image,
         )
 
-        cls.INDEX_URL = reverse('posts:index')
         cls.GROUP_LIST_URL = reverse(
             'posts:group_list', kwargs={'slug': f'{cls.group.slug}'}
         )
@@ -58,27 +59,23 @@ class PostViewsTests(TestCase):
         cls.POST_DETAIL_URL = reverse(
             'posts:post_detail', kwargs={'post_id': f'{cls.post.id}'}
         )
-        cls.POST_CREATE_URL = reverse('posts:post_create')
         cls.POST_EDIT_URL = reverse(
             'posts:post_edit', kwargs={'post_id': f'{cls.post.id}'}
         )
-        cls.FOLLOW = reverse('posts:follow_index')
+        cls.urls_templates_data = [
+            (INDEX_URL, 'posts/index.html'),
+            (PostViewsTests.GROUP_LIST_URL, 'posts/group_list.html'),
+            (PostViewsTests.PROFILE_URL, 'posts/profile.html'),
+            (PostViewsTests.POST_DETAIL_URL, 'posts/post_detail.html'),
+            (POST_CREATE_URL, 'posts/create_post.html'),
+            (PostViewsTests.POST_EDIT_URL, 'posts/create_post.html'),
+            (FOLLOW_URL, 'posts/follow.html'),
+        ]
 
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
         shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
-
-    def setUp(self):
-        self.urls_templates_data = [
-            (PostViewsTests.INDEX_URL, 'posts/index.html'),
-            (PostViewsTests.GROUP_LIST_URL, 'posts/group_list.html'),
-            (PostViewsTests.PROFILE_URL, 'posts/profile.html'),
-            (PostViewsTests.POST_DETAIL_URL, 'posts/post_detail.html'),
-            (PostViewsTests.POST_CREATE_URL, 'posts/create_post.html'),
-            (PostViewsTests.POST_EDIT_URL, 'posts/create_post.html'),
-            (PostViewsTests.FOLLOW, 'posts/follow.html'),
-        ]
 
     def test_post_pages_accessible_by_name(self):
         """Проверяем, что URL, генерируемый при помощи
@@ -102,33 +99,37 @@ class PostViewsTests(TestCase):
                     template
                 )
 
-    def context_page_obj_is_valid(self, url):
-        """Проверяем контекст по ключу 'page_obj'."""
-        response = PostViewsTests.author_client.get(url)
-        first_object = response.context['page_obj'][0]
-        self.assertIsInstance(first_object, Post)
-        self.assertEqual(first_object.author, PostViewsTests.author)
-        self.assertEqual(first_object.group, PostViewsTests.group)
-        self.assertEqual(first_object.image, PostViewsTests.post.image)
+    def context_is_valid(self, context, post=False):
+        """Проверяем контекст по ключу 'page_obj' и 'post'."""
+        if post:
+            self.assertIn('post', context)
+            post = context['post']
+        else:
+            self.assertIn('page_obj', context)
+            post = context['page_obj'][0]
+        self.assertEqual(post.author, PostViewsTests.author)
+        self.assertEqual(post.group, PostViewsTests.post.group)
+        self.assertEqual(post.image, PostViewsTests.post.image)
 
     def test_index_page_show_correct_context(self):
         """Шаблон index сформирован с правильным контекстом."""
-        self.context_page_obj_is_valid(PostViewsTests.INDEX_URL)
+        response = PostViewsTests.author_client.get(INDEX_URL)
+        self.context_is_valid(response.context)
 
     def test_group_list_page_show_correct_context(self):
         """Шаблон group_list сформирован с правильным контекстом."""
-        self.context_page_obj_is_valid(PostViewsTests.GROUP_LIST_URL)
         response = PostViewsTests.author_client.get(
             PostViewsTests.GROUP_LIST_URL
         )
         first_group = response.context['group']
+        self.context_is_valid(response.context)
         self.assertIsInstance(first_group, Group)
         self.assertEqual(first_group, PostViewsTests.group)
 
     def test_profile_page_show_correct_context(self):
         """Шаблон profile сформирован с правильным контекстом."""
-        self.context_page_obj_is_valid(PostViewsTests.PROFILE_URL)
         response = PostViewsTests.author_client.get(PostViewsTests.PROFILE_URL)
+        self.context_is_valid(response.context)
         self.assertEqual(len(response.context['page_obj']), 1)
         first_author = response.context['author']
         self.assertIsInstance(first_author, User)
@@ -136,18 +137,8 @@ class PostViewsTests(TestCase):
         following = response.context['following']
         self.assertIsInstance(following, bool)
 
-    def context_post_is_valid(self, url):
-        """Проверка контекста по ключу 'post'."""
-        response = PostViewsTests.author_client.get(url)
-        post = response.context['post']
-        self.assertIsInstance(post, Post)
-        self.assertEqual(post.author, PostViewsTests.author)
-        self.assertEqual(post.group, PostViewsTests.group)
-        self.assertEqual(post.image, PostViewsTests.post.image)
-
     def test_post_detail_page_show_correct_context(self):
         """Шаблон post_detail сформирован с правильным контекстом."""
-        self.context_post_is_valid(PostViewsTests.POST_DETAIL_URL)
         user = User.objects.create_user(username='testAuthorized')
         Comment.objects.create(
             post=PostViewsTests.post,
@@ -158,6 +149,7 @@ class PostViewsTests(TestCase):
             PostViewsTests.POST_DETAIL_URL
         )
         comment = response.context['comments'][0]
+        self.context_is_valid(response.context, True)
         self.assertIsInstance(comment, Comment)
         self.assertEqual(comment.author, user)
         self.assertEqual(comment.post, PostViewsTests.post)
@@ -173,16 +165,16 @@ class PostViewsTests(TestCase):
 
     def test_create_page_show_correct_context(self):
         """Шаблон create_post сформирован с правильным контекстом."""
-        self.form_fields_is_valid(PostViewsTests.POST_CREATE_URL)
+        self.form_fields_is_valid(POST_CREATE_URL)
 
     def test_edit_page_show_correct_context(self):
         """Шаблон create_post на странице редактирования записи
         сформирован с правильным контекстом."""
-        self.context_post_is_valid(PostViewsTests.POST_EDIT_URL)
         self.form_fields_is_valid(PostViewsTests.POST_EDIT_URL)
         response = PostViewsTests.author_client.get(
             PostViewsTests.POST_EDIT_URL
         )
+        self.context_is_valid(response.context, True)
         is_edit = response.context['is_edit']
         self.assertTrue(is_edit)
 
@@ -192,7 +184,7 @@ class PostViewsTests(TestCase):
         для которых была предназначена."""
         self.post = Post.objects.get(group=self.post.group)
         form_fields = {
-            PostViewsTests.INDEX_URL: self.post,
+            INDEX_URL: self.post,
             PostViewsTests.GROUP_LIST_URL: self.post,
             PostViewsTests.PROFILE_URL: self.post
         }
@@ -226,18 +218,14 @@ class PostViewsTests(TestCase):
             author=PostViewsTests.author,
             group=PostViewsTests.group,
         )
-        current_content = PostViewsTests.author_client.get(
-            PostViewsTests.INDEX_URL
-        ).content
+        current_content = PostViewsTests.author_client.get(INDEX_URL).content
         new_post.delete()
         after_delete_post_content = PostViewsTests.author_client.get(
-            PostViewsTests.INDEX_URL
-        ).content
+            INDEX_URL).content
         self.assertEqual(current_content, after_delete_post_content)
         cache.clear()
         after_delete_post_content = PostViewsTests.author_client.get(
-            PostViewsTests.INDEX_URL
-        ).content
+            INDEX_URL).content
         self.assertNotEqual(current_content, after_delete_post_content)
 
 
@@ -251,7 +239,6 @@ class PostPaginatorTests(TestCase):
             slug='test',
             description='Тест-описание',
         )
-        cls.INDEX_URL = reverse('posts:index')
         cls.GROUP_LIST_URL = reverse(
             'posts:group_list', kwargs={'slug': f'{cls.group.slug}'}
         )
@@ -277,7 +264,7 @@ class PostPaginatorTests(TestCase):
         на первой странице равно 10, а на второй - 5"""
 
         for url in [
-            PostPaginatorTests.INDEX_URL,
+            INDEX_URL,
             PostPaginatorTests.GROUP_LIST_URL,
             PostPaginatorTests.PROFILE_URL
         ]:
@@ -324,7 +311,6 @@ class FollowViewsTests(TestCase):
             'posts:profile_unfollow',
             kwargs={'username': f'{cls.author.username}'}
         )
-        cls.FOLLOW_URL = reverse('posts:follow_index')
 
     def setUp(self):
         self.guest_client = Client()
@@ -381,9 +367,7 @@ class FollowViewsTests(TestCase):
             user=self.user,
             author=FollowViewsTests.author
         )
-        response = self.authorized_client.get(
-            FollowViewsTests.FOLLOW_URL
-        )
+        response = self.authorized_client.get(FOLLOW_URL)
         first_object = response.context['page_obj'][0]
         self.assertEqual(len(response.context['page_obj']), 1)
         self.assertIsInstance(first_object, Post)
@@ -394,8 +378,6 @@ class FollowViewsTests(TestCase):
     def test_unfollow_context(self):
         """Проверяем, что новая запись пользователя не появляется
         в ленте тех, кто на него не подписан"""
-        response = self.authorized_client.get(
-            FollowViewsTests.FOLLOW_URL
-        )
+        response = self.authorized_client.get(FOLLOW_URL)
         self.assertEqual(len(response.context['page_obj']), 0)
         self.assertNotContains(response, FollowViewsTests.post)

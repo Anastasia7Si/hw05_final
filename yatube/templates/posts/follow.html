@@ -2,7 +2,7 @@
 {% block title %}Cтраница пользователя {{ user.username }}{% endblock %}
 {% block header %}Моя лента новостей{% endblock %}
 {% block content %} 
-  {% include 'includes/switcher.html'%}
+  {% include 'includes/switcher.html' with index=True follow=True %}    
   {% for post in page_obj %}
     {% include 'includes/post_card.html' with show_author=True show_group=True %}    
   {% endfor %}

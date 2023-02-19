@@ -5,13 +5,17 @@ User = get_user_model()
 
 
 class Group(models.Model):
-    """Класс для создания сообществ."""
+    """Класс для создания групп."""
     title = models.CharField(max_length=200, verbose_name='Имя группы')
     slug = models.SlugField(unique=True, verbose_name='Адрес')
     description = models.TextField(verbose_name='Описание группы')
 
     def __str__(self):
         return self.title
+
+    class Meta:
+        verbose_name = 'Группа'
+        ordering = ('title',)
 
 
 class Post(models.Model):
@@ -47,6 +51,7 @@ class Post(models.Model):
         return self.text[:15]
 
     class Meta:
+        verbose_name = 'Запись'
         ordering = ('-pub_date',)
 
 
@@ -73,6 +78,7 @@ class Comment(models.Model):
         verbose_name='Дата публикации комментария')
 
     class Meta:
+        verbose_name = 'Комментарий'
         ordering = ('-created',)
 
 
@@ -92,6 +98,7 @@ class Follow(models.Model):
     )
 
     class Meta:
+        verbose_name = 'Подписка'
         ordering = ('author',)
 
         constraints = (models.UniqueConstraint(
